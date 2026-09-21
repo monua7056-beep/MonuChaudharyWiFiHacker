@@ -7,14 +7,23 @@ from kivy.uix.popup import Popup
 from kivy.uix.filechooser import FileChooserListView
 from kivy.clock import Clock
 from kivy.core.window import Window
+from kivy.utils import platform
 import random
 import os
 import shutil
 
 Window.clearcolor = (0.02, 0.08, 0.02, 1)
 
-# ऐप की private folder जहाँ file save होगी
-APP_DIR = os.path.expanduser('~/.monu_wifi')
+# App storage folder
+if platform == 'android':
+    try:
+        from android.storage import app_storage_path
+        APP_DIR = app_storage_path()
+    except:
+        APP_DIR = '/data/data/com.monuchaudhary.monuwifi/files'
+else:
+    APP_DIR = os.path.expanduser('~/.monu_wifi')
+
 SAVED_FILE = os.path.join(APP_DIR, 'passwords.txt')
 
 
@@ -22,47 +31,47 @@ class MainScreen(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.orientation = 'vertical'
-        self.padding = 15
-        self.spacing = 10
+        self.padding = 12
+        self.spacing = 8
 
         self.networks = []
         self.selected_network = None
         self.passwords = []
 
-        # App folder बनाओ
+        # Folder बनाओ
         if not os.path.exists(APP_DIR):
             try:
                 os.makedirs(APP_DIR)
             except:
                 pass
 
-        # पुरानी file load करो (अगर है)
+        # पुरानी file load करो
         self.auto_load_saved()
 
         # Title
         title = Label(
             text='[b]Monu Chaudhary[/b]\n[b]WiFi Hacker Pro[/b]',
             markup=True,
-            font_size='24sp',
+            font_size='22sp',
             color=(0, 1, 0.25, 1),
-            size_hint=(1, 0.15)
+            size_hint=(1, 0.13)
         )
         self.add_widget(title)
 
-        # File status label
+        # Status
         self.status_label = Label(
             text=self.get_status_text(),
-            font_size='13sp',
+            font_size='12sp',
             color=(0, 1, 0.25, 1),
-            size_hint=(1, 0.08)
+            size_hint=(1, 0.07)
         )
         self.add_widget(self.status_label)
 
         # Terminal
-        self.scroll = ScrollView(size_hint=(1, 0.45))
+        self.scroll = ScrollView(size_hint=(1, 0.42))
         self.terminal = Label(
             text='> System ready...\n> Add password file first',
-            font_size='13sp',
+            font_size='12sp',
             color=(0, 1, 0.25, 1),
             halign='left',
             valign='top',
@@ -79,7 +88,7 @@ class MainScreen(BoxLayout):
         # Button 1: ADD PASSWORD FILE
         self.add_btn = Button(
             text='📁 ADD PASSWORD FILE',
-            font_size='18sp',
+            font_size='17sp',
             background_color=(0, 0.5, 1, 1),
             color=(1, 1, 1, 1),
             size_hint=(1, 0.1)
@@ -90,10 +99,10 @@ class MainScreen(BoxLayout):
         # Button 2: FIND NETWORK
         self.btn = Button(
             text='🔍 FIND NETWORK',
-            font_size='20sp',
+            font_size='19sp',
             background_color=(0, 1, 0.25, 1),
             color=(0, 0, 0, 1),
-            size_hint=(1, 0.12)
+            size_hint=(1, 0.11)
         )
         self.btn.bind(on_press=self.start_scan)
         self.add_widget(self.btn)
@@ -118,7 +127,6 @@ class MainScreen(BoxLayout):
     def log(self, msg):
         self.terminal.text += f'\n> {msg}'
 
-    # ============ AUTO LOAD SAVED FILE ============
     def auto_load_saved(self):
         try:
             if os.path.exists(SAVED_FILE):
@@ -133,19 +141,29 @@ class MainScreen(BoxLayout):
 
     # ============ ADD PASSWORD FILE ============
     def open_file_chooser(self, instance):
+        if platform == 'android':
+            try:
+                from android.permissions import request_permissions, Permission
+                request_permissions([
+                    Permission.READ_EXTERNAL_STORAGE,
+                    Permission.WRITE_EXTERNAL_STORAGE,
+                ])
+            except Exception as e:
+                print(f"Permission error: {e}")
+
         self.log('')
         self.log('📁 Opening file manager...')
-        self.log('   Select your passwords.txt file')
+        self.log('   Select your passwords.txt')
 
         content = BoxLayout(orientation='vertical', spacing=10, padding=10)
         filechooser = FileChooserListView(
-            path=os.path.expanduser('~'),
+            path='/sdcard' if platform == 'android' else os.path.expanduser('~'),
             filters=['*.txt']
         )
         content.add_widget(filechooser)
 
         btn_box = BoxLayout(size_hint_y=0.15, spacing=10)
-        select_btn = Button(text='✅ ADD THIS FILE', background_color=(0, 1, 0.25, 1))
+        select_btn = Button(text='✅ ADD', background_color=(0, 1, 0.25, 1))
         cancel_btn = Button(text='❌ CANCEL', background_color=(1, 0.2, 0.2, 1))
         btn_box.add_widget(select_btn)
         btn_box.add_widget(cancel_btn)
@@ -175,7 +193,6 @@ class MainScreen(BoxLayout):
 
     def import_file(self, path):
         try:
-            # पहले validate करो
             with open(path, 'r', encoding='utf-8') as f:
                 lines = [
                     line.strip() for line in f
@@ -186,13 +203,11 @@ class MainScreen(BoxLayout):
                 self.log('❌ File is empty!')
                 return
 
-            # App folder में copy करो
             shutil.copy(path, SAVED_FILE)
             self.passwords = lines
 
             self.log(f'✅ File added: {os.path.basename(path)}')
             self.log(f'   Total passwords: {len(self.passwords)}')
-            self.log(f'   Saved to app folder')
             self.update_status()
 
         except Exception as e:
@@ -203,7 +218,7 @@ class MainScreen(BoxLayout):
         if not self.passwords:
             self.log('')
             self.log('⚠️ No password file!')
-            self.log('   Please add file first.')
+            self.log('   Add file first.')
             return
 
         self.btn.disabled = True
@@ -230,15 +245,15 @@ class MainScreen(BoxLayout):
 
     def show_select_buttons(self):
         self.log('')
-        self.log('👇 Select a target:')
+        self.log('👇 Select target:')
         for name in self.networks:
             b = Button(
                 text=f'📶 {name}',
-                font_size='15sp',
+                font_size='14sp',
                 background_color=(0, 0.6, 0.15, 1),
                 color=(1, 1, 1, 1),
                 size_hint=(1, None),
-                height=45
+                height=42
             )
             b.bind(on_press=lambda inst, n=name: self.select_network(n))
             self.add_widget(b, index=len(self.children) - 3)
@@ -249,14 +264,14 @@ class MainScreen(BoxLayout):
         for n in self.networks:
             self.log(f'  • {n} 🔒')
         self.log('')
-        self.log(f'🎯 Target selected: {name}')
+        self.log(f'🎯 Target: {name}')
         Clock.schedule_once(lambda dt: self.check_passwords(), 1)
 
-    # ============ CHECK PASSWORDS (DYNAMIC) ============
+    # ============ CHECK PASSWORDS ============
     def check_passwords(self):
         self.log('')
         total = len(self.passwords)
-        self.log(f'🔐 Starting password check ({total} total)...')
+        self.log(f'🔐 Password check ({total} total)...')
 
         if total <= 5:
             delay = 1.2
@@ -282,7 +297,7 @@ class MainScreen(BoxLayout):
         masked = pwd[:3] + '*' * (len(pwd) - 3) if len(pwd) > 3 else '***'
         self.log(f'[{num}/{total}] Trying: {masked}...')
         if num == total:
-            self.log('Matching against saved database...')
+            self.log('Matching database...')
 
     def show_final_result(self):
         real_pwd = random.choice(self.passwords)
